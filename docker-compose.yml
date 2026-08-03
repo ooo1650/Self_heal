@@ -1,0 +1,146 @@
+# ── IMS Platform — Self-Healing Infrastructure Demo ──────────────────────────
+#
+# Services:
+#   postgres      — database (stable, no restart policy, no resource limits)
+#   backend       — Express API (restart: always, 128m/0.5cpu — attack target)
+#   frontend      — Next.js  (no restart policy, no resource limits)
+#   newrelic-infra — New Relic infrastructure agent (container + host monitoring)
+#
+# Usage:
+#   docker compose up --build
+#
+# Secrets: Postgres vars from ./.env (same dir). Backend secrets from ./api/.env.
+# ─────────────────────────────────────────────────────────────────────────────
+
+services:
+
+  # ── Postgres ────────────────────────────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: ims-postgres
+    environment:
+      # These vars are substituted from ims-platform/.env (same dir as this file).
+      # The postgres image reads POSTGRES_USER/PASSWORD/DB on first init to
+      # create the database and superuser.
+      POSTGRES_USER:     ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB:       ${POSTGRES_DB}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data   # data survives container restarts
+    # Port 5432 is intentionally NOT published to the host.
+    # Only the backend (on the same Compose network) can reach it.
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+    networks:
+      - ims-net
+
+  # ── Backend (Express API) ────────────────────────────────────────────────────
+  backend:
+    build:
+      context: ./api
+      dockerfile: Dockerfile
+    container_name: ims-backend
+    depends_on:
+      postgres:
+        condition: service_healthy   # waits for pg_isready, not just container start
+    env_file: ./api/.env
+    environment:
+      # Override DATABASE_URL to use the Compose service name as host.
+      # "postgres" resolves to the postgres container on the ims-net network.
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      NODE_ENV: development
+      PORT: 3001
+      # New Relic APM — must be in the container environment (not just dotenv)
+      # because newrelic is required before dotenv in app.js.
+      NEW_RELIC_LICENSE_KEY: ${NEW_RELIC_LICENSE_KEY}
+      NEW_RELIC_APP_NAME: self-healing-demo-backend
+      NEW_RELIC_NO_CONFIG_FILE: "true"
+      NEW_RELIC_LOG: stdout
+      NEW_RELIC_DISTRIBUTED_TRACING_ENABLED: "true"
+    ports:
+      - "3001:3001"                  # published so the browser/curl can reach it
+    volumes:
+      - backend-uploads:/app/uploads # product images persist across restarts
+    restart: always                  # Docker restarts after crash or OOM kill
+    # Resource limits — these are what make the OOM demo work.
+    # With 128m cap, the /attack/oom endpoint hits the limit and gets OOM-killed.
+    # cpus: "2.0" gives enough headroom for the CPU attack to saturate visibly
+    # while still being capped (Node worker threads will peg all 2 cores).
+    deploy:
+      resources:
+        limits:
+          memory: 128m
+          cpus: "1.0"
+    networks:
+      - ims-net
+
+  # ── Frontend (Next.js) ──────────────────────────────────────────────────────
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        # NEXT_PUBLIC_API_URL must be the HOST-published address of the backend,
+        # not the Compose service name. The frontend JS runs in the user's
+        # browser, which is outside the Compose network and can't resolve
+        # "backend" or "ims-backend". localhost:3001 is what the browser hits.
+        NEXT_PUBLIC_API_URL: http://localhost:3001
+    container_name: ims-frontend
+    depends_on:
+      - backend
+    ports:
+      - "3000:3000"
+    networks:
+      - ims-net
+
+  # ── New Relic Infrastructure Agent ──────────────────────────────────────────
+  # Monitors all containers on this host + host-level CPU/memory/disk/network.
+  # Discovers containers automatically via the Docker socket.
+  # Reports to the same NR account as the backend APM agent.
+  newrelic-infra:
+    image: newrelic/infrastructure:latest
+    container_name: ims-newrelic-infra
+    cap_add:
+      - SYS_PTRACE          # needed to read process-level metrics
+    pid: host               # share host PID namespace — required for process monitoring
+    network_mode: host      # host network gives the agent full visibility of host interfaces
+    privileged: false
+    dns:
+      - 8.8.8.8             # bypass 127.0.0.53 (systemd-resolved stub) which fails
+      - 8.8.4.4             # to resolve infra-api.newrelic.com on this host
+    environment:
+      NRIA_LICENSE_KEY: ${NEW_RELIC_LICENSE_KEY}
+      NRIA_DISPLAY_NAME: ims-platform-local
+      # Enable Docker container monitoring
+      NRIA_DOCKER_API_VERSION: "1.43"
+    volumes:
+      - /run/user/1000/docker.sock:/var/run/docker.sock:ro   # container discovery (rootless docker)
+      - /proc:/host/proc:ro                                   # host process metrics
+      - /sys:/host/sys:ro                                     # host kernel metrics
+      - /:/host/root:ro                                       # host filesystem metrics
+      # Custom integration — reads Docker Stats API directly (bypasses nri-docker
+      # cgroup path mismatch on rootless Podman/cgroup v2 user-scoped hierarchies)
+      - ./docker-stats-integration.sh:/var/db/newrelic-infra/custom-integrations/docker-stats.sh:ro
+      - ./docker-stats-integration.yml:/etc/newrelic-infra/integrations.d/docker-stats-integration.yml:ro
+    restart: unless-stopped
+    depends_on:
+      - backend
+      - frontend
+      - postgres
+
+# ── Named volumes ──────────────────────────────────────────────────────────────
+volumes:
+  postgres-data:
+  backend-uploads:
+
+# ── Network ────────────────────────────────────────────────────────────────────
+# Explicit network so all three services share DNS resolution.
+# postgres/backend/frontend are the hostnames containers use to reach each other.
+# newrelic-infra uses network_mode: host so it's not on ims-net.
+networks:
+  ims-net:
+    driver: bridge

@@ -1,0 +1,12 @@
+---
+# Custom integration config for New Relic Infrastructure agent.
+# Runs docker-stats.sh every 15s to collect real container memory/CPU
+# via the Docker Stats API (bypasses nri-docker cgroup path issues).
+#
+# Place this file at: /etc/newrelic-infra/integrations.d/docker-stats-integration.yml
+# Place docker-stats.sh at: /var/db/newrelic-infra/custom-integrations/docker-stats.sh
+
+integrations:
+  - name: com.custom.docker-stats
+    exec: /bin/sh /var/db/newrelic-infra/custom-integrations/docker-stats.sh
+    interval: 10s
