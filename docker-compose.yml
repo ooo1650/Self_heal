@@ -84,11 +84,12 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
       args:
-        # NEXT_PUBLIC_API_URL must be the HOST-published address of the backend,
-        # not the Compose service name. The frontend JS runs in the user's
-        # browser, which is outside the Compose network and can't resolve
-        # "backend" or "ims-backend". localhost:3001 is what the browser hits.
-        NEXT_PUBLIC_API_URL: http://localhost:3001
+        # NEXT_PUBLIC_API_URL is baked into the JS bundle at build time.
+        # Set FRONTEND_API_URL in ims-platform/.env before running docker compose up --build.
+        # Local:      http://localhost:3001
+        # Azure/prod: http://<VM-IP>  (if Nginx proxies /api/ and /attack/ to port 3001)
+        #             http://<VM-IP>:3001  (if port 3001 is directly exposed)
+        NEXT_PUBLIC_API_URL: ${FRONTEND_API_URL:-http://localhost:3001}
     container_name: ims-frontend
     depends_on:
       - backend

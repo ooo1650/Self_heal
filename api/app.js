@@ -26,25 +26,25 @@ if (!fs.existsSync(uploadsProductsDir)) {
 }
 
 // ── Security & parsing middleware ──────────────────────────────────────────────
-// ⚠️  CORS FLAG — currently app.use(cors()) with no options sends
-// Access-Control-Allow-Origin: * on every response. This works locally
-// but WILL break in production when the browser sends credentials
-// (cookies, Authorization headers) because browsers reject credentialed
-// requests to wildcard origins. Before deploying to Azure, replace with:
-//
-//   app.use(cors({
-//     origin: [
-//       'http://localhost:3000',
-//       'https://your-frontend-domain.azurewebsites.net',
-//     ],
-//     credentials: true,
-//   }));
-//
-// The FRONTEND_URL env var is already set in .env — use that list.
+// CORS: explicitly allowlist the frontend origin.
+// Wildcard (*) was replaced here because credentialed requests (Authorization
+// headers) are rejected by browsers when the server responds with *.
+const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS ?? 'http://localhost:3000')
+  .split(',')
+  .map(o => o.trim());
+
 app.use(helmet({
   crossOriginResourcePolicy: { policy: "cross-origin" }
 }));
-app.use(cors());
+app.use(cors({
+  origin: (origin, callback) => {
+    // Allow requests with no origin (curl, Postman, server-to-server)
+    if (!origin) return callback(null, true);
+    if (ALLOWED_ORIGINS.includes(origin)) return callback(null, true);
+    callback(new Error(`CORS: origin ${origin} not allowed`));
+  },
+  credentials: true,
+}));
 app.use(express.json());
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
