@@ -1,0 +1,11 @@
+node_modules
+npm-debug.log*
+.env
+.env.*
+.git
+.gitignore
+.next
+.vercel
+Dockerfile
+.dockerignore
+README.md

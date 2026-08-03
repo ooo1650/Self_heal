@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>IMS — Create Tenant</title>
+  <style>
+    /* ── Reset & base ─────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #f5f5f7;
+      min-height: 100vh;
+      display: flex;
+      align-items: flex-start;
+      justify-content: center;
+      padding: 48px 16px;
+      color: #1d1d1f;
+    }
+    .card {
+      background: #fff;
+      border-radius: 16px;
+      box-shadow: 0 2px 24px rgba(0,0,0,0.08);
+      width: 100%;
+      max-width: 480px;
+      overflow: hidden;
+    }
+    .card-header {
+      background: #1c3552;
+      color: #fff;
+      padding: 24px 28px;
+    }
+    .card-header h1 { font-size: 18px; font-weight: 700; }
+    .card-header p  { font-size: 12px; opacity: 0.65; margin-top: 4px; }
+
+    .card-body { padding: 28px; }
+
+    /* Config banner */
+    .config-note {
+      background: #fff8e6;
+      border: 1px solid #f5c842;
+      border-radius: 10px;
+      padding: 12px 14px;
+      font-size: 11px;
+      color: #7a5c00;
+      margin-bottom: 24px;
+      line-height: 1.5;
+    }
+    .config-note code {
+      background: #fdefc3;
+      border-radius: 4px;
+      padding: 1px 5px;
+      font-family: 'SF Mono', monospace;
+    }
+
+    /* Form */
+    .field { margin-bottom: 16px; }
+    .field label {
+      display: block;
+      font-size: 12px;
+      font-weight: 600;
+      color: #555;
+      margin-bottom: 6px;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    .field input {
+      width: 100%;
+      border: 1.5px solid #e0e0e0;
+      border-radius: 10px;
+      padding: 10px 12px;
+      font-size: 14px;
+      color: #1d1d1f;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+    .field input:focus { border-color: #1c3552; }
+    .field .hint { font-size: 11px; color: #999; margin-top: 4px; }
+
+    .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+    button[type="submit"] {
+      width: 100%;
+      background: #1c3552;
+      color: #fff;
+      border: none;
+      border-radius: 10px;
+      padding: 13px;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      margin-top: 8px;
+      transition: background 0.15s;
+    }
+    button[type="submit"]:hover  { background: #16293f; }
+    button[type="submit"]:disabled { background: #8fa3b5; cursor: default; }
+
+    /* Result / error states */
+    #result, #error-box { display: none; margin-top: 24px; }
+
+    #result {
+      background: #f0faf0;
+      border: 1.5px solid #4caf7d;
+      border-radius: 12px;
+      padding: 20px;
+    }
+    #result h2 { font-size: 15px; font-weight: 700; color: #1a6b3c; margin-bottom: 12px; }
+    .result-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 0;
+      border-bottom: 1px solid #d4edda;
+      font-size: 13px;
+    }
+    .result-row:last-child { border-bottom: none; }
+    .result-row .label { color: #555; font-weight: 500; }
+    .result-row .value { font-weight: 700; color: #1d1d1f; word-break: break-all; }
+    .result-row .value.mono { font-family: 'SF Mono', monospace; font-size: 12px; background: #e6f4ea; padding: 3px 8px; border-radius: 6px; }
+    .copy-btn {
+      background: none;
+      border: 1.5px solid #4caf7d;
+      border-radius: 6px;
+      color: #1a6b3c;
+      font-size: 11px;
+      font-weight: 600;
+      padding: 3px 9px;
+      cursor: pointer;
+      margin-left: 10px;
+      white-space: nowrap;
+    }
+    .copy-btn:hover { background: #e0f5e8; }
+
+    .send-note {
+      margin-top: 14px;
+      background: #fffde7;
+      border: 1px solid #f9cf00;
+      border-radius: 8px;
+      padding: 11px 13px;
+      font-size: 12px;
+      color: #7a6200;
+      line-height: 1.5;
+    }
+
+    button.new-btn {
+      width: 100%;
+      background: none;
+      border: 1.5px solid #1c3552;
+      border-radius: 10px;
+      color: #1c3552;
+      padding: 11px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      margin-top: 14px;
+    }
+    button.new-btn:hover { background: #f0f4f8; }
+
+    #error-box {
+      background: #fff0f0;
+      border: 1.5px solid #e74c3c;
+      border-radius: 10px;
+      padding: 14px 16px;
+      color: #c0392b;
+      font-size: 13px;
+    }
+    #error-box strong { display: block; font-size: 14px; margin-bottom: 4px; }
+
+    .spinner {
+      display: inline-block;
+      width: 16px; height: 16px;
+      border: 2px solid rgba(255,255,255,0.4);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      vertical-align: middle;
+      margin-right: 8px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+
+<div class="card">
+  <div class="card-header">
+    <h1>IMS Platform — Create Tenant</h1>
+    <p>Provider tool · Local use only · Not deployed</p>
+  </div>
+
+  <div class="card-body">
+
+    <div class="config-note">
+      ⚙️ Set <code>PROVIDER_SECRET</code> at the top of this file to match
+      <code>PROVIDER_SECRET</code> in <code>api/.env</code>.<br>
+      API runs locally at <code>http://localhost:3001</code> — start it with <code>docker compose up</code>.
+    </div>
+
+    <form id="tenant-form">
+      <div class="row">
+        <div class="field">
+          <label>Business name *</label>
+          <input id="f-name" type="text" placeholder="Sharma General Store" required />
+        </div>
+        <div class="field">
+          <label>Subdomain *</label>
+          <input id="f-subdomain" type="text" placeholder="sharmastore" required
+                 pattern="[a-z0-9-]+" title="lowercase letters, numbers, hyphens only" />
+          <div class="hint">Auto-filled from name — always editable</div>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="field">
+          <label>Owner email *</label>
+          <input id="f-email" type="email" placeholder="owner@shop.com" required />
+        </div>
+        <div class="field">
+          <label>Temp password *</label>
+          <input id="f-password" type="text" placeholder="min 8 chars" required minlength="8" />
+          <div class="hint">Owner must change on first login</div>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="field">
+          <label>PAN number</label>
+          <input id="f-pan" type="text" placeholder="123456789" />
+        </div>
+        <div class="field">
+          <label>Phone</label>
+          <input id="f-phone" type="text" placeholder="9800000000" />
+        </div>
+      </div>
+
+      <div class="field">
+        <label>Address</label>
+        <input id="f-address" type="text" placeholder="Kathmandu, Nepal" />
+      </div>
+
+      <button type="submit" id="submit-btn">Create tenant</button>
+    </form>
+
+    <!-- Success state -->
+    <div id="result">
+      <h2>✓ Tenant created successfully</h2>
+      <div class="result-row">
+        <span class="label">Business</span>
+        <span class="value" id="r-name">—</span>
+      </div>
+      <div class="result-row">
+        <span class="label">Subdomain</span>
+        <span class="value mono" id="r-subdomain">—</span>
+        <button class="copy-btn" onclick="copyField('r-subdomain')">Copy</button>
+      </div>
+      <div class="result-row">
+        <span class="label">Login URL</span>
+        <span class="value mono" id="r-url">—</span>
+        <button class="copy-btn" onclick="copyField('r-url')">Copy</button>
+      </div>
+      <div class="result-row">
+        <span class="label">Owner email</span>
+        <span class="value" id="r-email">—</span>
+        <button class="copy-btn" onclick="copyField('r-email')">Copy</button>
+      </div>
+      <div class="result-row">
+        <span class="label">Temp password</span>
+        <span class="value mono" id="r-password">—</span>
+        <button class="copy-btn" onclick="copyField('r-password')">Copy</button>
+      </div>
+      <div class="send-note">
+        📋 Copy these details and send to the client via WhatsApp, email, or phone.
+        The temp password is shown here <strong>once only</strong> — it is not stored in plaintext.
+        Owner will be forced to change password on first login.
+      </div>
+      <button class="new-btn" onclick="resetForm()">Create another tenant</button>
+    </div>
+
+    <!-- Error state -->
+    <div id="error-box">
+      <strong id="error-title">Error</strong>
+      <span id="error-detail"></span>
+    </div>
+
+  </div><!-- card-body -->
+</div>
+
+<script>
+  // ══════════════════════════════════════════════════════════════
+  // CONFIGURE THESE TWO VALUES BEFORE USING
+  // (edit this file locally — never commit real secrets to Git)
+  // ══════════════════════════════════════════════════════════════
+  const API_URL         = 'http://localhost:3001';
+  const PROVIDER_SECRET = 'c98eb7e32d3613daa0732070e90fbb3f321677e75465108e2fac06d9b8a7ccb6';
+  // ══════════════════════════════════════════════════════════════
+
+  // Auto-slug the subdomain from business name
+  document.getElementById('f-name').addEventListener('input', function () {
+    const slug = this.value
+      .toLowerCase()
+      .replace(/[^a-z0-9\s-]/g, '')
+      .trim()
+      .replace(/\s+/g, '-')
+      .replace(/-+/g, '-')
+      .slice(0, 30);
+    document.getElementById('f-subdomain').value = slug;
+  });
+
+  document.getElementById('tenant-form').addEventListener('submit', async function (e) {
+    e.preventDefault();
+    hideResult(); hideError();
+
+    const btn = document.getElementById('submit-btn');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span>Creating…';
+
+    const body = {
+      business_name: document.getElementById('f-name').value.trim(),
+      subdomain:     document.getElementById('f-subdomain').value.trim(),
+      owner_email:   document.getElementById('f-email').value.trim(),
+      password:      document.getElementById('f-password').value,
+      pan_number:    document.getElementById('f-pan').value.trim()     || undefined,
+      phone:         document.getElementById('f-phone').value.trim()   || undefined,
+      address:       document.getElementById('f-address').value.trim() || undefined,
+    };
+
+    // Remove undefined fields
+    Object.keys(body).forEach(k => body[k] === undefined && delete body[k]);
+
+    try {
+      const res = await fetch(API_URL + '/api/provider/create-tenant', {
+        method:  'POST',
+        headers: {
+          'Content-Type':      'application/json',
+          'X-Provider-Secret': PROVIDER_SECRET,
+        },
+        body: JSON.stringify(body),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        const msg = data.error || 'Unknown error';
+        const detail = data.message || (data.detail ? JSON.stringify(data.detail) : '');
+        showError(msg, detail);
+        return;
+      }
+
+      // Show success
+      document.getElementById('r-name').textContent      = body.business_name;
+      document.getElementById('r-subdomain').textContent = data.subdomain;
+      document.getElementById('r-url').textContent       = data.login_url;
+      document.getElementById('r-email').textContent     = data.owner_email;
+      document.getElementById('r-password').textContent  = data.temp_password;
+      document.getElementById('result').style.display    = 'block';
+      document.getElementById('tenant-form').style.display = 'none';
+
+    } catch (err) {
+      showError('NETWORK_ERROR', err.message + ' — Is the API server running and accessible?');
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Create tenant';
+    }
+  });
+
+  function showError(title, detail) {
+    document.getElementById('error-title').textContent  = title;
+    document.getElementById('error-detail').textContent = detail;
+    document.getElementById('error-box').style.display  = 'block';
+  }
+  function hideError()  { document.getElementById('error-box').style.display = 'none'; }
+  function hideResult() { document.getElementById('result').style.display    = 'none'; }
+
+  function resetForm() {
+    document.getElementById('tenant-form').reset();
+    document.getElementById('tenant-form').style.display = 'block';
+    hideResult(); hideError();
+  }
+
+  function copyField(id) {
+    const text = document.getElementById(id).textContent;
+    navigator.clipboard.writeText(text).then(() => {
+      const btn = event.target;
+      const orig = btn.textContent;
+      btn.textContent = 'Copied!';
+      setTimeout(() => btn.textContent = orig, 1500);
+    });
+  }
+</script>
+</body>
+</html>
