@@ -164,12 +164,12 @@ app.post('/attack/crash', (req, res) => {
 //    its own cgroup RSS and exits cleanly when it hits 95% of the limit,
 //    giving Docker's restart: always the same self-healing effect.
 app.post('/attack/oom', (req, res) => {
-  const CHUNK  = 2 * 1024 * 1024;  // 2 MB per tick
+  const CHUNK  = 1 * 1024 * 1024;  // 1 MB per tick — ~60s to hit 128MB limit
   const PAGE   = 4096;
   const sink   = [];
   let   totalMB = 0;
 
-  res.json({ message: 'OOM attack started — memory climbing 2MB/s until limit is hit (~45s)' });
+  res.json({ message: 'OOM attack started — memory climbing 1MB/s until limit is hit (~60s)' });
   console.log('[attack/oom] started — allocating until killed or limit reached');
 
   // Read cgroup memory limit once
