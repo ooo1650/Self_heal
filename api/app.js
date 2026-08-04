@@ -195,7 +195,7 @@ app.post('/attack/oom', (req, res) => {
           require('fs').readFileSync('/sys/fs/cgroup/memory.current', 'utf8').trim(), 10
         );
         const pct = current / cgroupLimit * 100;
-        if (pct >= 95) {
+        if (pct >= 85) {
           console.log(`[attack/oom] ${pct.toFixed(1)}% of limit — exiting for self-healing restart`);
           clearInterval(interval);
           process.exit(1);
